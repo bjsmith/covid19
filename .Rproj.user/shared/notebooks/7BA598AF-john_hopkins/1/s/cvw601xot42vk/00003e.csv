@@ -1,4 +1,0 @@
-"0","htmlwidgets::saveWidget(as_widget(ggplotly(myplot)),""new_cases.html"",selfcontained=FALSE)
-"
-"2","NaNs produced"
-"2","Transformation introduced infinite values in continuous y-axis"

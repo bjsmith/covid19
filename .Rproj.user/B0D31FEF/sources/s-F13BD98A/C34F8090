@@ -7,14 +7,14 @@
     "folds" : "",
     "hash" : "0",
     "id" : "C34F8090",
-    "lastKnownWriteTime" : 1583738300,
-    "last_content_update" : 1583738300366,
+    "lastKnownWriteTime" : 1583738989,
+    "last_content_update" : 1583738989762,
     "path" : "~/Google Drive/politics/coronavirus/code/john_hopkins.Rmd",
     "project_path" : "john_hopkins.Rmd",
     "properties" : {
         "chunk_output_type" : "inline",
-        "cursorPosition" : "309,0",
-        "scrollLine" : "299",
+        "cursorPosition" : "295,75",
+        "scrollLine" : "319",
         "tempName" : "Untitled1"
     },
     "relative_order" : 4,
