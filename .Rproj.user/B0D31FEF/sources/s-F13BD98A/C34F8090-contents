@@ -307,7 +307,7 @@ myplot<-ggplot(new_cases
            hjust=0,size=2,fontface="bold")
 
 
-htmlwidgets::saveWidget(as_widget(ggplotly(myplot)),"new_cases.html")
+htmlwidgets::saveWidget(as_widget(ggplotly(myplot)),"new_cases.html",selfcontained=FALSE)
   
 myplot
 ```
