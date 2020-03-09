@@ -1,0 +1,23 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1580505625825.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "FA39BAB4",
+    "lastKnownWriteTime" : 1580894717,
+    "last_content_update" : 1580894717613,
+    "path" : "~/Google Drive/politics/coronavirus/code/graph_totalcases_log.R",
+    "project_path" : "graph_totalcases_log.R",
+    "properties" : {
+        "cursorPosition" : "45,31",
+        "scrollLine" : "0",
+        "tempName" : "Untitled1"
+    },
+    "relative_order" : 1,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

@@ -1,0 +1,24 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1583561062738.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "C34F8090",
+    "lastKnownWriteTime" : 1583737881,
+    "last_content_update" : 1583737881860,
+    "path" : "~/Google Drive/politics/coronavirus/code/john_hopkins.Rmd",
+    "project_path" : "john_hopkins.Rmd",
+    "properties" : {
+        "chunk_output_type" : "inline",
+        "cursorPosition" : "290,70",
+        "scrollLine" : "278",
+        "tempName" : "Untitled1"
+    },
+    "relative_order" : 4,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_markdown"
+}

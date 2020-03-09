@@ -1,0 +1,13 @@
+name: john_hopkins
+title: john_hopkins
+username:
+account: benjsmith
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 1916976
+bundleId: 2860715
+url: https://benjsmith.shinyapps.io/john_hopkins/
+when: 1583632100.35648
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: data/.DS_Store

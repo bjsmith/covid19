@@ -1,0 +1,23 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1580969996535.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "D51BDC8",
+    "lastKnownWriteTime" : 1580971807,
+    "last_content_update" : 1580971807864,
+    "path" : "~/Google Drive/politics/coronavirus/code/graph.R",
+    "project_path" : "graph.R",
+    "properties" : {
+        "cursorPosition" : "41,41",
+        "scrollLine" : "26",
+        "tempName" : "Untitled1"
+    },
+    "relative_order" : 3,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

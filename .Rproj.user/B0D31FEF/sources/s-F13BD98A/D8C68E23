@@ -1,0 +1,22 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1583568704987.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "D8C68E23",
+    "lastKnownWriteTime" : 1583633973,
+    "last_content_update" : 1583633973070,
+    "path" : "~/Google Drive/politics/coronavirus/code/john_hopkins/app.R",
+    "project_path" : "john_hopkins/app.R",
+    "properties" : {
+        "cursorPosition" : "43,32",
+        "scrollLine" : "26"
+    },
+    "relative_order" : 8,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}
