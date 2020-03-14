@@ -1,0 +1,29 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1584149694282.000,
+    "dirty" : false,
+    "encoding" : "",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "3863CAF3",
+    "lastKnownWriteTime" : 4294967302,
+    "last_content_update" : 1584149694282,
+    "path" : null,
+    "project_path" : null,
+    "properties" : {
+        "cacheKey" : "933BF2A4",
+        "caption" : "confirmed_cases_long_bycountry[, .(Pop = mean(Population2016)), ",
+        "contentUrl" : "grid_resource/gridviewer.html?env=_rs_no_env&obj=&cache_key=933BF2A4",
+        "displayedObservations" : "6",
+        "environment" : "_rs_no_env",
+        "object" : "",
+        "preview" : "0",
+        "totalObservations" : "6",
+        "variables" : "2"
+    },
+    "relative_order" : 15,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_dataframe"
+}

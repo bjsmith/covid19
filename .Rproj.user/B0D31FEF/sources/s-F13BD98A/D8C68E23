@@ -5,15 +5,15 @@
     "dirty" : false,
     "encoding" : "UTF-8",
     "folds" : "",
-    "hash" : "0",
+    "hash" : "1044305151",
     "id" : "D8C68E23",
-    "lastKnownWriteTime" : 1583633973,
-    "last_content_update" : 1583633973070,
+    "lastKnownWriteTime" : 1583999493,
+    "last_content_update" : 1583999493841,
     "path" : "~/Google Drive/politics/coronavirus/code/john_hopkins/app.R",
     "project_path" : "john_hopkins/app.R",
     "properties" : {
-        "cursorPosition" : "43,32",
-        "scrollLine" : "26"
+        "cursorPosition" : "201,62",
+        "scrollLine" : "190"
     },
     "relative_order" : 8,
     "source_on_save" : false,

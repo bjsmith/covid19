@@ -1,0 +1,6 @@
+"0","select_countries<-c(""France"",""Italy"",""Germany"",""Australia"",""United States"",""Korea, South"",""Spain"",""United Kingdom"","
+"0","                    ""Netherlands"",""Sweden"",""Denmark"",""Singapore"",""Taiwan*"")"
+"0","cc_graph_filtered<-cc_graph[ConfirmedCases<10^9 & `Country/Region` %in% select_countries &"
+"0","                              case_date<Sys.Date()+7]"
+"2","Error: object 'cc_graph' not found
+"
