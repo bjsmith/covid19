@@ -18,7 +18,7 @@ library(directlabels)
 library(dplyr)
 library(plotly)
 
-confirmed_cases<-data.table(read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_19-covid-Confirmed.csv"))
+confirmed_cases<-data.table(read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv"))
 confirmed_cases<-confirmed_cases[,
                                  names(which(!apply(confirmed_cases,2,function(ccc){all(is.na(ccc))}))),
                                  with=FALSE]

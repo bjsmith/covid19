@@ -1,0 +1,317 @@
+---
+title: "R Notebook"
+output:
+  html_document:
+    keep_md: yes
+    self_contained: no
+---
+This is an exploration of the John Hopkins data.
+
+```{r}
+library(readr)
+library(data.table)
+library(ggplot2)
+library(plotly)
+library(directlabels)
+library(dplyr)
+
+```
+
+
+
+```{r}
+
+confirmed_cases<-data.table(read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv"))
+country_populations<-data.table(read.csv("population-figures-by-country-csv_csv.csv"))
+
+ma_lag_length<-3
+
+```
+
+Let's get cases by country, to make this a bit easier.
+
+```{r}
+confirmed_cases<-confirmed_cases[,1:(ncol(confirmed_cases)-1)]
+transform_cols<-colnames(confirmed_cases)[5:ncol(confirmed_cases)]
+id_vars <- c("Country/Region","Province/State","Lat","Long")
+
+
+confirmed_cases_long <- melt(confirmed_cases,
+                             id.vars=id_vars,
+                             measure.vars = transform_cols,
+                             variable.name = "case_date",
+                             value.name = "Confirmed Cases"
+                             )
+
+confirmed_cases_long_bycountry <- confirmed_cases_long[,.(`Confirmed Cases`=sum(`Confirmed Cases`)),by=.(`Country/Region`,case_date)]
+
+pops_clean<-country_populations[,.(Country,Population2016=Year_2016)]
+pops_clean<-rbind(pops_clean,data.table("Country"="Taiwan*","Population2016"=23800000))
+population_renaming<-list(list("Brunei","Brunei Darussalam"),
+                          list("Czechia","Czech Republic"),
+                          list("Egypt","Egypt, Arab Rep."),
+                          list("French Guiana","Guyana"),
+                          list("Iran","Iran, Islamic Rep."),
+                          list("Korea, South","Korea, Rep."),
+                          list("North Macedonia","Macedonia, FYR"),
+                          list("Russia","Russian Federation"),
+                          list("Slovakia","Slovak Republic"),
+                          list("US","United States"))
+for (poptuple in population_renaming){
+  pops_clean[Country==poptuple[[2]],Country:=poptuple[[1]]]
+}
+
+
+confirmed_cases_long_bycountry<-
+  merge(confirmed_cases_long_bycountry,
+        pops_clean,
+        by.x="Country/Region",
+        by.y="Country",
+        all.x=TRUE
+        )
+#View(confirmed_cases_long_bycountry[,.(Pop=mean(Population2016)),by=`Country/Region`] %>% .[is.na(Pop)])
+```
+
+
+
+
+
+```{r}
+
+confirmed_cases_long_bycountry$case_date<-as.Date(confirmed_cases_long_bycountry$case_date,format="%m/%d/%y")
+
+threshold<-max(confirmed_cases_long_bycountry[`Country/Region`=="New Zealand",`Confirmed Cases`])
+#mark which days have reached the threshold
+confirmed_cases_long_bycountry[,IsAtOrPastThreshold:=(`Confirmed Cases`>=threshold)]
+
+#identify the first day for each country that has reached the threshold
+confirmed_cases_long_bycountry[,
+                               DatePastThreshold:=min(.SD[IsAtOrPastThreshold==TRUE,case_date]),
+                               by=`Country/Region`]
+
+#then calculate the case_date relative to the threshold
+confirmed_cases_long_bycountry[,DaysPastThreshold:=as.integer(case_date-DatePastThreshold)]
+
+
+confirmed_cases_long_bycountry$case_date<-as.Date(confirmed_cases_long_bycountry$case_date,format="%m/%d/%y")
+
+     #make it easy to see the US & UK
+     confirmed_cases_long_bycountry[`Country/Region`=="US",
+                                    `Country/Region`:="United States",
+                                    ]
+     confirmed_cases_long_bycountry[`Country/Region`=="UK",
+                                    `Country/Region`:="United Kingdom",
+                                    ]
+```
+
+
+```{r}
+
+
+
+#mark which days have reached the threshold
+confirmed_cases_long_bycountry[,IsAtOrPastThreshold:=(`Confirmed Cases`>=threshold)]
+
+#identify the first day for each country that has reached the threshold
+confirmed_cases_long_bycountry[,
+                              DatePastThreshold:=min(.SD[IsAtOrPastThreshold==TRUE,case_date]),
+                              by=`Country/Region`]
+
+#then calculate the date relative to the threshold
+confirmed_cases_long_bycountry[,DaysPastThreshold:=as.integer(case_date-DatePastThreshold)]
+
+confirmed_graph<-confirmed_cases_long_bycountry
+#Remove China if it was above the threshold on the first day. we don't do this to any other countries
+#but China is further along than all others.
+if(threshold<min(confirmed_graph[`Country/Region`=="China",`Confirmed Cases`])){
+ confirmed_graph <- 
+   confirmed_graph[`Country/Region`!="China"]
+}
+
+#now - set a 'target country'
+target_country <- "New Zealand"
+#we look to see which is closet to that country at that threshold and in the days prior
+target_c_data<-confirmed_graph[
+  `Country/Region`=="New Zealand",
+  .(TargetConfirmedCases=`Confirmed Cases`,DaysPastThreshold)]
+
+
+target_c_data$DaysPastThreshold
+
+confirmed_graph<-merge(
+  confirmed_graph,
+  target_c_data,all.x=TRUE)
+
+#now for each country
+#which has the smallest sum of squares difference from NZ's progression?
+countries_diff<-confirmed_graph[DaysPastThreshold>-7 & DaysPastThreshold<=0
+                  ,.(SumSquaresDiff=sum((TargetConfirmedCases-`Confirmed Cases`)^2))
+                  ,by=`Country/Region`]
+
+comparison_countries<-as.character(
+  countries_diff[order(SumSquaresDiff)] %>% 
+    .[2:6,`Country/Region`]
+  )
+
+
+```
+
+
+```{r}
+case_limit<-20
+days_limit <- 21
+
+
+
+
+
+gg_confirmed_basic<-function(confirmed_graph,comparison_countries){
+  #define colour groups
+  confirmed_graph$SelectorStatus<-"DUnselected"
+  confirmed_graph[`Country/Region`==target_country, SelectorStatus:="CTarget"]
+  confirmed_graph[`Country/Region` %in%comparison_countries , SelectorStatus:="BComparators"]
+  other_countries<-setdiff(unique(confirmed_graph$`Country/Region`),c(comparison_countries,target_country))
+  confirmed_graph$`Country/Region`<-factor(
+    confirmed_graph$`Country/Region`,
+    levels=c(other_countries,comparison_countries,target_country),
+    order=TRUE
+  )
+  # confirmed_graph$SelectorStatus<-factor(
+  #   confirmed_graph$SelectorStatus,
+  #   levels=c("CTarget","BComparators","DUnselected"),
+  #   order=TRUE
+  #                                           
+  #                                           )
+    #now we want a list of the lines
+  #with an x axis point either at the end of the graph,
+  #or at the end of the line, whichever is first,     
+  country_labels<-confirmed_graph[#`Country/Region` %in% c(comparison_countries,target_country)
+    ,
+                                .(intercept_day=min(days_limit,max(DaysPastThreshold))),
+                                by=`Country/Region`] %>% .[!is.na(intercept_day)] %>%
+   #and then at that x-axis point, we want the y-axis point.  
+   merge(confirmed_graph[,.(`Country/Region`,DaysPastThreshold,`Confirmed Cases`,
+                            DatePastThreshold,SelectorStatus)],
+                       by.x=c("Country/Region","intercept_day"),
+                       by.y=c("Country/Region","DaysPastThreshold"),
+         all.x=TRUE,all.y=FALSE)
+  
+  x_breaks  <- seq(-7,days_limit,7)
+  x_labels <- c(paste(abs(x_breaks[1]),"Days Before"),
+               x_breaks[2:(length(x_breaks)-1)],
+               paste(x_breaks[length(x_breaks)],"Days After"))
+
+  ggplot(
+      confirmed_graph[order(SelectorStatus),],
+      aes(x=DaysPastThreshold,
+          y=`Confirmed Cases`,
+          group=`Country/Region`,
+          color=SelectorStatus,#DatePastThreshold
+          alpha=SelectorStatus
+            ))+
+ geom_line(size=1)+
+ #geom_point(alpha=0.5)+
+ scale_x_continuous(limits=c(-7,days_limit),
+                    breaks=x_breaks,
+                    labels = x_labels)+
+ coord_cartesian(xlim=c(-7,days_limit+3),
+                 ylim=c(20,max(confirmed_graph$`Confirmed Cases`)))+
+ scale_y_continuous(trans = "log10",
+                    breaks = c(1,2,5,10,
+                               20,50,100,200,500,1000,2000,5000,10000,20000,50000,100000),
+                    minor_breaks=NULL,
+                    labels = scales::comma,
+                    sec.axis = dup_axis())+
+ geom_vline(xintercept = 0,linetype="dashed")+
+  scale_color_manual(values=c("#3333ff","#aa0000","#222222"))+
+  scale_alpha_manual(values=c(1,1,0.2))+#c(0.2,1,1))+
+    theme(legend.position = "none")+
+ geom_text(data=country_labels,
+           aes(x=intercept_day,y=`Confirmed Cases`,label=`Country/Region`),
+           hjust=0,size=3,fontface="bold")
+  }
+  
+myplot<-gg_confirmed_basic(confirmed_graph,comparison_countries)+
+  labs(title=paste0("Growth in cases by day from the ",threshold," case mark, by country"),
+      x=paste0("Days past first day with ",threshold," cases"),
+      y="Total confirmed cases",
+      color="Date Country Reached Threshold")
+ 
+
+
+myplot
+```
+
+
+
+```{r}
+case_limit<-20
+days_limit <- 21
+
+
+myplot<-gg_confirmed_basic(confirmed_graph,
+                           c()
+                           )+labs(
+  title="We can compare New Zealand's progression with locations around the world from the same time",
+      x=paste0("Days past first day with ",threshold," cases"),
+      y="Total confirmed cases",
+      color="Date Country Reached Threshold")
+ 
+
+
+myplot
+
+```
+
+
+```{r}
+case_limit<-20
+days_limit <- 21
+
+
+myplot<-gg_confirmed_basic(confirmed_graph,
+                           c("Singapore","Spain","Italy")
+                           )+labs(
+  title="There's a world of difference between the best cases, Singapore,\nand the worst cases, Italy and Spain",
+      x=paste0("Days past first day with ",threshold," cases"),
+      y="Total confirmed cases",
+      color="Date Country Reached Threshold")
+ 
+
+
+myplot
+
+```
+
+
+
+
+```{r}
+case_limit<-20
+days_limit <- 21
+
+
+myplot<-gg_confirmed_basic(confirmed_graph,
+                          comparison_countries
+                           )+labs(
+  title="New Zealand following along a path\npreviously led by the Panama, Luxembourg, Ireland, Austria, and France",
+      x=paste0("Days past first day with ",threshold," cases"),
+      y="Total confirmed cases",
+      color="Date Country Reached Threshold",
+  caption=" Source: John Hopkins Dataset.\n http://github.com/bjsmith @curiouskiwicat benjsmith.shinyapps.io/john_hopkins/")
+ 
+
+
+myplot
+
+```
+
+Which are most similar to us?
+
+Finland is now up to 450 cases with community transmission. 7 days onward (16 March), they implemented a raft of severe measures, including banning gatherings of more than 10 people and closing down schools from primary level up.
+
+https://en.wikipedia.org/wiki/2020_coronavirus_pandemic_in_Finland
+
+Chile reached 43 cases on 13 March. On the same day, they banned events of more than 500 people. The borders were closed three days later, and soon after, a "State of Catastrophe" was declared. Schools were shut down, and public gatherings were limited.
+
+Austria reached 41 cases on 5 March. Universities, schools, and restaurants were closed by 17 March. Currently, there are over 2600 cases and 6 fatalities.

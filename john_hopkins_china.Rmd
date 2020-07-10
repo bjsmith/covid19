@@ -21,10 +21,8 @@ library(dplyr)
 
 ```{r}
 
-confirmed_cases<-data.table(read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv"))
+confirmed_cases<-data.table(read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_19-covid-Confirmed.csv"))
 country_populations<-data.table(read.csv("population-figures-by-country-csv_csv.csv"))
-
-ma_lag_length<-3
 
 ```
 
@@ -43,10 +41,8 @@ confirmed_cases_long <- melt(confirmed_cases,
                              value.name = "Confirmed Cases"
                              )
 
-
 confirmed_cases_long[,SelectedRegion:=`Country/Region`]
-confirmed_cases_long[`Country/Region`=="China",SelectedRegion:=paste0(`Province/State`," (China)")]
-
+confirmed_cases_long[`Country/Region`=="China",SelectedRegion:=`Province/State`]
 
 confirmed_cases_long_bycountry <- confirmed_cases_long[,.(`Confirmed Cases`=sum(`Confirmed Cases`)),by=.(SelectedRegion,case_date)]
 
@@ -115,7 +111,7 @@ confirmed_cases_long_bycountry$case_date<-as.Date(confirmed_cases_long_bycountry
 
 ```{r}
 
-    threshold<-30
+    threshold<-50
      
      #mark which days have reached the threshold
      confirmed_cases_long_bycountry[,IsAtOrPastThreshold:=(`Confirmed Cases`>=threshold)]
@@ -138,7 +134,7 @@ confirmed_cases_long_bycountry$case_date<-as.Date(confirmed_cases_long_bycountry
 
      
      
-     case_limit<-20
+     case_limit<-40
      days_limit <- 21
 
      #now we want a list of the lines
@@ -164,8 +160,7 @@ confirmed_cases_long_bycountry$case_date<-as.Date(confirmed_cases_long_bycountry
             #                                    "Hong Kong","US")]
             ,
             aes(x=DaysPastThreshold,y=`Confirmed Cases`,
-                group=SelectedRegion,color=SelectedRegion=="New Zealand"#DatePastThreshold
-                  ))+
+                group=SelectedRegion,color=DatePastThreshold))+
        geom_line(size=1,alpha=0.3)+
        #geom_point(alpha=0.5)+
        scale_x_continuous(limits=c(-7,days_limit),
@@ -203,10 +198,7 @@ confirmed_cases_long_bycountry[order(case_date),
   
 #moving average over 7 days; figure is dated on the last day of the average window.
 confirmed_cases_long_bycountry[order(case_date),
-                               NewCasesMA:=c(rep(NA,ma_lag_length-1),zoo::rollapply(`New Cases`,ma_lag_length,mean)
-                                                 ),
-                               # NewCasesMA:=shift(zoo::rollapply(`New Cases`,ma_lag_length,mean),
-                               #                   ma_lag_length-1),
+                               NewCasesMA:=shift(zoo::rollapply(`New Cases`,7,mean),6),
                                SelectedRegion]
 
 new_cases<-confirmed_cases_long_bycountry[!is.na(NewCasesMA)]
@@ -275,12 +267,12 @@ confirmed_cases_long_bycountry[order(case_date),
 #moving average over 7 days; figure is dated on the last day of the average window.
 confirmed_cases_long_bycountry[order(case_date),
                                #NewCasesMA:=shift(zoo::rollapply(`New Cases`,7,mean),0),
-                               NewCasesMA_c:=zoo::rollapply(`New Cases`,ma_lag_length,mean,fill=c(NA)),
+                               NewCasesMA_c:=zoo::rollapply(`New Cases`,7,mean),
                                SelectedRegion]
 
 confirmed_cases_long_bycountry[order(case_date),
                                #NewCasesMA:=shift(zoo::rollapply(`New Cases`,7,mean),0),
-                               NewCasesMA:=shift(NewCasesMA_c,-2),#shift(NewCasesMA_c,ma_lag_length-1),
+                               NewCasesMA:=shift(NewCasesMA_c,6),
                                SelectedRegion]
 
 #View(confirmed_cases_long_bycountry[SelectedRegion=="New Zealand"])
@@ -356,9 +348,8 @@ htmlwidgets::saveWidget(as_widget(ggplotly(myplot)),"new_cases.html",selfcontain
 myplot
 ```
 ```{r}
-select_countries<-c("Hong Kong (China)","Korea, South","Singapore","Taiwan*",
-                    "Japan")
-new_cases<-confirmed_cases_long_bycountry[!is.na(NewCasesMA)] %>% .[SelectedRegion %in% select_countries]
+
+new_cases<-confirmed_cases_long_bycountry[!is.na(NewCasesMA)]
 
 # if(threshold<min(new_cases[SelectedRegion=="Mainland China",`Confirmed Cases`])){
 #        new_cases <-
@@ -368,27 +359,13 @@ new_cases<-confirmed_cases_long_bycountry[!is.na(NewCasesMA)] %>% .[SelectedRegi
 case_limit<-40
 days_limit <- 21
 
-
-target_country<-"Singapore"
-comparison_countries <- c("Hong Kong (China)","Korea, South","Taiwan*",
-                    "Japan")
-new_cases$SelectorStatus<-"DUnselected"
-new_cases[SelectedRegion==target_country, SelectorStatus:="CTarget"]
-new_cases[SelectedRegion %in%comparison_countries , SelectorStatus:="BComparators"]
-other_countries<-setdiff(unique(new_cases$SelectedRegion),c(comparison_countries,target_country))
-new_cases$SelectedRegion<-factor(
-  new_cases$SelectedRegion,
-  levels=c(other_countries,comparison_countries,target_country),
-  order=TRUE
-)
-
 #now we want a list of the lines
 #with an x axis point either at the end of the graph,
 #or at the end of the line, whichever is first,     
 country_labels<-new_cases[,
                               .(intercept_date=max(case_date)),
                               by=SelectedRegion] %>% 
- merge(new_cases[,.(SelectedRegion,case_date,NewCasesMA,SelectorStatus)],
+ merge(new_cases[,.(SelectedRegion,case_date,NewCasesMA)],
                      by.x=c("SelectedRegion","intercept_date"),
                      by.y=c("SelectedRegion","case_date"),
        all.x=TRUE,all.y=FALSE)
@@ -399,15 +376,14 @@ country_labels_grouped<- country_labels[,
                                           GroupedNewCases=mean(NewCasesMA),
                                           SelectedRegion = .SD[,SelectedRegion][[1]]
                                           )
-                                        ,by=.(NewCasesGroup,intercept_date,SelectorStatus)] %>% .[GroupedNewCases>2]
+                                        ,by=.(NewCasesGroup,intercept_date)] %>% .[GroupedNewCases>2]
 x_breaks  <- seq(min(new_cases$case_date),max(new_cases$case_date),7)
 
 
 
 myplot<-ggplot(new_cases
       ,
-      aes(x=as.Date(case_date),y=NewCasesMA,color=SelectorStatus,
-          alpha=SelectorStatus,
+      aes(x=as.Date(case_date),y=NewCasesMA,color=SelectedRegion,
           group=SelectedRegion))+
  geom_line(size=1,alpha=0.5)+
   theme_classic()+
@@ -415,8 +391,8 @@ myplot<-ggplot(new_cases
  scale_x_date(#breaks=x_breaks,
    date_breaks = "7 days",
                     minor_breaks=NULL,date_labels="%b %d")+
- coord_cartesian(xlim=c(max(new_cases$case_date)-63,max(new_cases$case_date)+7),
-                 ylim=c(1,max(new_cases$NewCasesMA)))+
+ coord_cartesian(xlim=c(max(new_cases$case_date)-21,max(new_cases$case_date)+3),
+                 ylim=c(20,max(new_cases$NewCasesMA)))+
  scale_y_continuous(trans = "log10",
                     breaks = c(2,5,10,20,50,100,200,500,1000,2000,5000,10000,20000,50000,100000),
                     minor_breaks=NULL,
@@ -432,88 +408,13 @@ myplot<-ggplot(new_cases
  theme(legend.position = "none")+
  geom_text(data=country_labels_grouped[!(Countries %in% c("Switzerland","Norway"))],
            aes(x=intercept_date,y=GroupedNewCases,label=Countries),
-           hjust=0,size=2,fontface="bold")+
-  scale_color_manual(values=c("#3333ff","#aa0000","#222222"))+
-  scale_alpha_manual(values=c(1,1,0.2))
-
-
-#htmlwidgets::saveWidget(as_widget(ggplotly(myplot)),"new_cases.html",selfcontained=FALSE)
-  
-myplot
-```
-
-
-
-Next point should be measuring proportion growth in new cases, over this 7 day period.
-
-
-## By population
-
-```{r}
-confirmed_cases_long_bycountry[,NewCasesMAProp:=NewCasesMA/Population2016]
-new_cases<-confirmed_cases_long_bycountry[!is.na(NewCasesMA)]
-
-case_limit<-40
-days_limit <- 21
-
-nc_bypop_display<-new_cases[Population2016>10^5]#only countries with more than 100,000 people.
-#now we want a list of the lines
-#with an x axis point either at the end of the graph,
-#or at the end of the line, whichever is first,     
-country_labels<-nc_bypop_display[,
-                              .(intercept_date=max(case_date)),
-                              by=SelectedRegion] %>% 
- merge(nc_bypop_display[,.(SelectedRegion,case_date,NewCasesMAProp)],
-                     by.x=c("SelectedRegion","intercept_date"),
-                     by.y=c("SelectedRegion","case_date"),
-       all.x=TRUE,all.y=FALSE)
-
-country_labels[,NewCasesGroup:=round(log(NewCasesMAProp,10),1)]
-cl_grouped_nc_prop<- country_labels[,
-                                        .(Countries=paste0(SelectedRegion, collapse=", "),
-                                          GroupedNewCases=mean(NewCasesMAProp),
-                                          SelectedRegion = .SD[,SelectedRegion][[1]]
-                                          )
-                                        ,by=.(NewCasesGroup,intercept_date)]
-x_breaks  <- seq(min(nc_bypop_display$case_date),max(nc_bypop_display$case_date),7)
-
-
-
-myplot<-ggplot(nc_bypop_display
-      ,
-      aes(x=as.Date(case_date),y=NewCasesMAProp,color=SelectedRegion=="New Zealand",
-          group=SelectedRegion))+
- geom_line(size=1,alpha=0.5)+
-  theme_classic()+
- #geom_point(alpha=0.5)+
- scale_x_date(#breaks=x_breaks,
-   date_breaks = "7 days",
-                    minor_breaks=NULL,date_labels="%b %d")+
- coord_cartesian(xlim=c(max(nc_bypop_display$case_date)-21,max(nc_bypop_display$case_date)+7),
-                 ylim=c(4*10e-7,max(nc_bypop_display$NewCasesMAProp)*2)
-                 )+
- scale_y_continuous(trans = "log10",
-                    breaks = rep(c(2,5,10),6)*rep(10^seq(-9,-9+6-1,1),each=3),
-                    minor_breaks=NULL,
-                    #labels = function(x){paste0("1 per ", scales::comma(1/x))},
-                    labels = function(x){paste0(scales::comma(x*1000000,nsmall=0,digits=1), " per million")},
-                    sec.axis = dup_axis())+
- #geom_vline(xintercept = 0,linetype="dashed")+
- #geom_hline(yintercept = threshold,,linetype="dashed")+
- labs(title=paste0("New confirmed cases per capita by country"),
-      subtitle="New Zealand highlighted in blue",
-      x=paste0("Date"),
-      y=paste0("New Cases (",ma_lag_length," day rolling average)"),
-      color="Date Country Reached Threshold",
-      caption="Countries of over 100 thousand people reported.\n Source: John Hopkins Dataset.\n http://github.com/bjsmith @curiouskiwicat benjsmith.shinyapps.io/john_hopkins/")+
- theme(legend.position = "none")+
- geom_text(data=cl_grouped_nc_prop,
-           aes(x=intercept_date,y=GroupedNewCases,label=Countries),
            hjust=0,size=2,fontface="bold")
 
 
-#htmlwidgets::saveWidget(as_widget(ggplotly(myplot)),"nc_bypop_display",selfcontained=FALSE)
+htmlwidgets::saveWidget(as_widget(ggplotly(myplot)),"new_cases.html",selfcontained=FALSE)
   
 myplot
 ```
+
+
 
