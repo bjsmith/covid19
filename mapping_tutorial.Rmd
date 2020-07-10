@@ -1,0 +1,344 @@
+---
+title: "Untitled"
+author: "Ben Smith"
+date: "4/22/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(lubridate)
+```
+
+
+```{r}
+
+jh_cases_recovered<-readr::read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_recovered_global.csv")
+jh_cases_recovered$EventType<-"Recoveries"
+jh_cases_confirmed <- readr::read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv")
+jh_cases_confirmed$EventType<-"CasesConfirmed"
+jh_deaths<-readr::read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_global.csv")
+jh_deaths$EventType<-"Deaths"
+jh_data<-rbind(jh_cases_confirmed,jh_cases_recovered,jh_deaths)
+jh_bycountry<-jh_data %>% select(-Lat,-Long,-`Province/State`) %>% group_by(`Country/Region`,EventType) %>% summarise_all(sum,na.rm=TRUE)
+
+jh_long<-jh_bycountry %>% tidyr::gather("Date","Count",3:ncol(.))
+jh_long$Date<-as.Date(jh_long$Date,format="%m/%d/%y")
+
+jh_dxc <- jh_long %>% tidyr::spread("EventType","Count")
+
+jh_country_mapping <- readr::read_csv("../data/mapping/country_mapping_jh.csv")
+jh_dxc <- left_join(jh_dxc,jh_country_mapping,by=c("Country/Region" = "John_Hopkins_Name"))
+
+jh_dxc<- jh_dxc%>% mutate(ActiveCases = CasesConfirmed-Deaths-Recoveries)
+
+```
+
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+library(sf)
+#library(raster)
+library(dplyr)
+library(spData)
+library(spDataLarge)
+
+#library(tmap)    # for static and interactive maps
+library(leaflet) # for interactive maps
+#library(mapview) # for interactive maps
+library(ggplot2) # tidyverse vis package
+library(shiny)   # for web applications
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+```{r}
+nz$Name
+```
+
+```{r pressure, echo=FALSE}
+map_nz = tm_shape(nz) +tm_fill("Population")+ tm_polygons()
+
+map_nz
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+```{r}
+map_nz+tm_shape(nz_elev)+ tm_raster(alpha = 0.7)
+```
+
+
+
+
+
+```{r}
+tmap_mode("view")
+```
+```{r}
+map_nz = tm_shape(nz) +tm_fill("Population",alpha=0.9)+ tm_polygons()+tm_basemap(server = "OpenTopoMap")
+map_nz
+```
+
+```{r}
+pal = colorNumeric("RdYlBu", domain = cycle_hire$nbikes)
+leaflet(data = cycle_hire) %>% 
+  addProviderTiles(providers$Stamen.TonerLite) %>% 
+  addCircles(col = ~pal(nbikes), opacity = 0.9) %>% 
+  addPolygons(data = lnd, fill = FALSE) %>% 
+  addLegend(pal = pal, values = ~nbikes) %>% 
+  setView(lng = -0.1, 51.5, zoom = 12) %>% 
+  addMiniMap()
+```
+
+
+
+```{r}
+library(maps)
+leaflet(data = nz)
+  addPolygons(data = nz, fill = FALSE) %>% 
+  addMiniMap()
+```
+
+
+
+
+```{r}
+library(dplyr)
+
+#http://leaflet-extras.github.io/leaflet-providers/preview/index.html
+m <- leaflet() %>% 
+  addProviderTiles(providers$OpenStreetMap) %>%
+  setView(zoom=1.5,lat=0,lng =0)
+m
+```
+
+
+```{r}
+#load the test rates and prevalence of COVID-19
+
+tests <- read.csv("../data/mapping/full-list-daily-covid-19-tests-per-thousand.csv")
+owid_fullset <-read.csv("../data/mapping/owid-covid-data.csv",stringsAsFactors = FALSE)
+owid_fullset$date<-as.Date(as.character(owid_fullset$date))
+country_codes<-read.csv("../data/mapping/country-codes.csv")
+country_iso_2_to_3_map<-country_codes[,c("ISO3166.1.Alpha.2","ISO3166.1.Alpha.3","official_name_en")]
+
+test_data_availability<-owid_fullset %>% group_by(date) %>% summarise(datacount=sum(!is.na(new_tests)))
+latest_date <- max(owid_fullset$date)
+date_period_begin<- latest_date - days(7)
+
+most_complete_testing_date<-filter(test_data_availability,datacount==max(test_data_availability$datacount))$date
+
+
+
+#one day
+# owid_fullset_latest_case_data <- owid_fullset %>% filter(date>=latest_date) %>% select(-contains("test"))%>% select(-date)
+# owid_fullset_latest_testing_data<-owid_fullset %>% filter(date==most_complete_testing_date) %>% select(iso_code,contains("test"))
+# owid_observable_data<-left_join(owid_fullset_latest_case_data,owid_fullset_latest_testing_data)
+# owid_observable_data$TestsPerCase<-owid_observable_data$new_tests/owid_observable_data$new_cases
+# world_with_covid_data<-
+#   left_join(world,country_iso_2_to_3_map,by=c("iso_a2" = "ISO3166.1.Alpha.2"),name="iso_a2") %>%
+#   left_join(owid_observable_data,by=c("ISO3166.1.Alpha.3" = "iso_code"))
+
+#let's try 7-day averages
+owid_7_day_average_testing_observable<-owid_fullset %>% 
+  filter(date>=date_period_begin) %>% 
+  select(-contains("total"))%>%select(-contains("tests_units"))%>%  
+  group_by(iso_code,location) %>%
+  summarise_all(mean,na.rm=TRUE)
+
+owid_7_day_average_testing_observable$TestsPerCase <- owid_7_day_average_testing_observable$new_tests/owid_7_day_average_testing_observable$new_cases
+world_with_covid_data<-
+  left_join(world,country_iso_2_to_3_map,by=c("iso_a2" = "ISO3166.1.Alpha.2"),name="iso_a2") %>%
+  left_join(owid_7_day_average_testing_observable,by=c("ISO3166.1.Alpha.3" = "iso_code"))
+```
+
+```{r}
+
+vals_to_include <- is.finite(world_with_covid_data$TestsPerCase) & !is.na(world_with_covid_data$TestsPerCase)
+
+world_with_covid_data_inc<-world_with_covid_data[vals_to_include,]
+pal<-colorQuantile(palette="Blues",domain= world_with_covid_data_inc$TestsPerCase,n=5)
+
+chloro_labels <- paste0(world_with_covid_data_inc$name_long, ": ", as.character(round(world_with_covid_data_inc$TestsPerCase),2))
+
+m <- leaflet(world_with_covid_data_inc) %>% 
+  addProviderTiles(providers$OpenStreetMap) %>%
+  addPolygons(data=world_with_covid_data_inc,weight=2,fillColor=~pal(TestsPerCase),
+              highlightOptions = highlightOptions(color='white',weight=1,
+                                                  bringToFront = TRUE),
+              label=chloro_labels,
+              labelOptions=labelOptions(textsize="15px")) %>% 
+  addLegend("bottomright", pal = pal, values = ~TestsPerCase,
+            labels=c("2","4","6","85","10"),
+            labFormat=function(type,cuts,p){
+              n=length(cuts)
+              return(paste0(round(cuts[-n])," to ", round(cuts[-1])))
+              #return(quantile(world_with_covid_data_inc$TestsPerCase,))
+            },
+            
+            #labFormat = labelFormat(transform=function(x){x}),
+    title = "Tests per case <br /> (7 day average)",
+    opacity = 1
+  ) 
+  #setView(zoom=1.5,lat=0,lng =0) 
+m
+```
+
+
+What if, as a first cut, we estimate the true infections as the number of deaths 3 weeks prior, multiplied by 200, to assume an 0.5% CFR? That might be appropriate - let's see how it compares.
+```{r}
+
+#we could do the lags another day but right now we're just interested in that one 3 week average figure.
+
+#select the cases 3 weeks ago
+owid_7_day_cases_lagged<-owid_fullset %>% 
+  filter(date>=(date_period_begin - days(21)) & date<(date_period_begin - days(14))) %>% 
+  select(iso_code,location,contains("cases")) %>% 
+  group_by(iso_code,location) %>%
+  summarise_all(mean,na.rm=TRUE)
+
+#select the current deaths
+owid_7_day_deaths<-owid_fullset %>% 
+  filter(date>=date_period_begin) %>% 
+  select(iso_code,location,contains("deaths")) %>% 
+  group_by(iso_code,location) %>%
+  summarise_all(mean,na.rm=TRUE)
+
+
+
+deaths_with_lagged_cases <- owid_7_day_cases_lagged %>% left_join(owid_7_day_deaths)
+
+assumed_cfr<-0.005
+deaths_with_lagged_cases$InferredDetectionRate <- assumed_cfr*deaths_with_lagged_cases$new_cases/(deaths_with_lagged_cases$new_deaths)
+deaths_with_lagged_cases$CountryPopulation<-deaths_with_lagged_cases$total_cases/deaths_with_lagged_cases$total_cases_per_million*10^6
+#we want the inferred case population rate
+#this has to come from the john hopkins data because we can get active cases from that.
+jh_key_stats<-jh_dxc %>% ungroup %>% filter(Date>=date_period_begin) %>% select(CasesConfirmed,Deaths,Recoveries,`ISO3166-1-Alpha-3`)
+deaths_with_lagged_cases <- deaths_with_lagged_cases %>% left_join(jh_key_stats,by=c("iso_code"="ISO3166-1-Alpha-3"))
+
+deaths_with_lagged_cases$InferredActiveCasePopulationRate <- (
+  (deaths_with_lagged_cases$total_cases/deaths_with_lagged_cases$InferredDetectionRate)/
+    deaths_with_lagged_cases$CountryPopulation
+)
+
+world_with_covid_data<-
+  left_join(world,country_iso_2_to_3_map,by=c("iso_a2" = "ISO3166.1.Alpha.2"),name="iso_a2") %>%
+  left_join(deaths_with_lagged_cases,by=c("ISO3166.1.Alpha.3" = "iso_code"))
+```
+
+
+
+
+
+```{r}
+
+
+
+vals_to_include <- is.finite(world_with_covid_data$InferredDetectionRate) & !is.na(world_with_covid_data$InferredDetectionRate)
+
+inc_data<-world_with_covid_data[vals_to_include,]
+pal<-colorQuantile(palette="Blues",domain= inc_data$InferredDetectionRate,n=5)
+
+chloro_labels <- paste0(inc_data$name_long, ": ", as.character(scales::percent(inc_data$InferredDetectionRate,accuracy = 0.1)))
+
+m <- leaflet(inc_data) %>% 
+  addProviderTiles(providers$OpenStreetMap) %>%
+  addPolygons(data=inc_data,weight=2,opacity=0.6,fillColor=~pal(InferredDetectionRate),fillOpacity = 0.8,
+              highlightOptions = highlightOptions(color='white',weight=1,
+                                                  bringToFront = TRUE),
+              label=chloro_labels,
+              labelOptions=labelOptions(textsize="15px")) %>% 
+  addLegend("bottomright", pal = pal, values = ~InferredDetectionRate,
+            labFormat=function(type,cuts,p){
+              n=length(cuts)
+              return(paste0(scales::percent(cuts[-n])," to ", scales::percent(cuts[-1])))
+              #return(quantile(world_with_covid_data_inc$TestsPerCase,))
+            },
+            
+            #labFormat = labelFormat(transform=function(x){x}),
+    title = "Inferred detection rate <br /> (deaths over cases three weeks prior; <br /> likely to overestimate in countries<br /> with poor death recording)",
+    opacity = 1
+  ) 
+  #setView(zoom=1.5,lat=0,lng =0) 
+m
+```
+
+
+
+
+```{r}
+
+
+
+vals_to_include <- is.finite(world_with_covid_data$InferredCasePopulationRate) & !is.na(world_with_covid_data$InferredCasePopulationRate)
+
+inc_data<-world_with_covid_data[vals_to_include,]
+pal<-colorQuantile(palette="Blues",domain= inc_data$InferredCasePopulationRate,n=4)
+
+chloro_labels <- paste0(inc_data$name_long, ": ", as.character(scales::percent(inc_data$InferredCasePopulationRate,accuracy = 0.001)))
+
+m <- leaflet(inc_data) %>% 
+  addProviderTiles(providers$OpenStreetMap) %>%
+  addPolygons(data=inc_data,weight=2,opacity=0.6,fillColor=~pal(InferredCasePopulationRate),fillOpacity = 0.8,
+              highlightOptions = highlightOptions(color='white',weight=1,
+                                                  bringToFront = TRUE),
+              label=chloro_labels,
+              labelOptions=labelOptions(textsize="15px")) %>% 
+  addLegend("bottomright", pal = pal, values = ~InferredCasePopulationRate,
+            labFormat=function(type,cuts,p){
+              n=length(cuts)
+              return(paste0(scales::percent(cuts[-n],accuracy = 0.01)," to ", scales::percent(cuts[-1],accuracy=0.01)))
+              #return(quantile(world_with_covid_data_inc$TestsPerCase,))
+            },
+            
+            #labFormat = labelFormat(transform=function(x){x}),
+    title = "Inferred case population infection rate <br /> (three weeks prior; <br /> likely to underestimate in countries<br /> with poor death recording)<br /> needs to change to ACTIVE CASES NOW rather than TOTAL CASES 3 WEEKS AGO",
+    opacity = 1
+  ) 
+  #setView(zoom=1.5,lat=0,lng =0) 
+m
+```
+
+
+
+
+
+
+```{r}
+world_with_covid_data$InfectedPerT
+
+vals_to_include <- is.finite(world_with_covid_data$InferredCasePopulationRate) & !is.na(world_with_covid_data$InferredCasePopulationRate)
+
+inc_data<-world_with_covid_data[vals_to_include,]
+pal<-colorQuantile(palette="Blues",domain= inc_data$InferredCasePopulationRate,n=4)
+
+chloro_labels <- paste0(inc_data$name_long, ": ", as.character(scales::percent(inc_data$InferredCasePopulationRate,accuracy = 0.001)))
+
+m <- leaflet(inc_data) %>% 
+  addProviderTiles(providers$OpenStreetMap) %>%
+  addPolygons(data=inc_data,weight=2,opacity=0.6,fillColor=~pal(InferredCasePopulationRate),fillOpacity = 0.8,
+              highlightOptions = highlightOptions(color='white',weight=1,
+                                                  bringToFront = TRUE),
+              label=chloro_labels,
+              labelOptions=labelOptions(textsize="15px")) %>% 
+  addLegend("bottomright", pal = pal, values = ~InferredCasePopulationRate,
+            labFormat=function(type,cuts,p){
+              n=length(cuts)
+              return(paste0(scales::percent(cuts[-n],accuracy = 0.01)," to ", scales::percent(cuts[-1],accuracy=0.01)))
+              #return(quantile(world_with_covid_data_inc$TestsPerCase,))
+            },
+            
+            #labFormat = labelFormat(transform=function(x){x}),
+    title = "Inferred case population infection rate <br /> (three weeks prior; <br /> likely to underestimate in countries<br /> with poor death recording)<br /> needs to change to ACTIVE CASES NOW rather than TOTAL CASES 3 WEEKS AGO",
+    opacity = 1
+  ) 
+  #setView(zoom=1.5,lat=0,lng =0) 
+m
+```

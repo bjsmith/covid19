@@ -1,6 +1,0 @@
-"0","confirmed_cases_long_bycountry$case_date<-as.Date(confirmed_cases_long_bycountry$case_date,format=""%m/%d/%y"")"
-"0","ggplot(confirmed_cases_long_bycountry[`Country/Region` %in% c(""New Zealand"",""Australia"",""Canada"")],"
-"0","       aes(x=case_date,y=`Confirmed Cases`,group=`Country/Region`,color=`Country/Region`))+"
-"0","  geom_line() + "
-"0","  scale_x_date(limits=c(min(confirmed_cases_long_bycountry$case_date),max(confirmed_cases_long_bycountry$case_date)+8))+"
-"0","  geom_dl(aes(label=`Country/Region`),method=list(""last.qp"",cex=1))"

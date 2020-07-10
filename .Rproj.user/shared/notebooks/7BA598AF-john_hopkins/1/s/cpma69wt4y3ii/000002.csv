@@ -1,6 +1,0 @@
-"0","new_cases[,DeltaNewCasesMA:=NewCasesMA-shift(NewCasesMA),`Country/Region`]"
-"0","new_cases[,.(CaseData=NewCasesMA,"
-"0","                       case_date,"
-"0","                       `Country/Region`,"
-"0","                       CaseDataType=""Actual"""
-"0","                       )]"

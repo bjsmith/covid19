@@ -1,0 +1,422 @@
+---
+title: "Untitled"
+author: "Ben Smith"
+date: "4/22/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(lubridate)
+```
+
+
+```{r}
+
+jh_cases_recovered<-readr::read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_recovered_global.csv")
+jh_cases_recovered$EventType<-"Recoveries"
+jh_cases_confirmed <- readr::read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv")
+jh_cases_confirmed$EventType<-"CasesConfirmed"
+jh_deaths<-readr::read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_global.csv")
+jh_deaths$EventType<-"Deaths"
+jh_data<-rbind(jh_cases_confirmed,jh_cases_recovered,jh_deaths)
+jh_bycountry<-jh_data %>% dplyr::select(-Lat,-Long,-`Province/State`) %>% group_by(`Country/Region`,EventType) %>% summarise_all(sum,na.rm=TRUE)
+
+jh_long<-jh_bycountry %>% tidyr::gather("Date","Count",3:ncol(.))
+jh_long$Date<-as.Date(jh_long$Date,format="%m/%d/%y")
+
+jh_dxc <- jh_long %>% tidyr::spread("EventType","Count")
+
+jh_country_mapping <- readr::read_csv("../data/mapping/country_mapping_jh.csv")
+jh_dxc <- left_join(jh_dxc,jh_country_mapping,by=c("Country/Region" = "John_Hopkins_Name"))
+
+jh_dxc<- jh_dxc%>% mutate(ActiveCases = CasesConfirmed-Deaths-Recoveries)
+
+#now get life expectancy
+life_exp<-readr::read_csv("../data/mapping/lifeexpectancy-verbose.csv") %>% 
+  filter(GhoDisplay=="Life expectancy at birth (years)" & SexCode=="BTSX") %>%
+  select(CountryCode,Numeric,YearCode) %>% group_by(CountryCode) %>% filter(YearCode==max(YearCode)) %>%ungroup
+
+colnames(life_exp)[colnames(life_exp)=="Numeric"]<-"LifeExp"
+life_exp<-rbind(life_exp,
+                tibble::as_tibble(data.frame(CountryCode="TWN","LifeExp"=80.4,"YearCode"=2017,stringsAsFactors = FALSE)))
+
+
+#mapping to get iso2 to iso3
+country_codes<-read.csv("../data/mapping/country-codes.csv")
+country_iso_2_to_3_map<-country_codes[,c("ISO3166.1.Alpha.2","ISO3166.1.Alpha.3","official_name_en")]
+```
+
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+library(sf)
+#library(raster)
+library(dplyr)
+library(spData)
+library(spDataLarge)
+
+#library(tmap)    # for static and interactive maps
+library(leaflet) # for interactive maps
+#library(mapview) # for interactive maps
+library(ggplot2) # tidyverse vis package
+library(shiny)   # for web applications
+```
+
+
+```{r}
+polygon_rev<-rbind(
+      c(1.0,104.0),
+      c(1.0,104.2),
+      c(1.2,104.4),
+      c(1.4,104.4),
+      c(1.6,104.2),
+      c(1.6,104.0),
+      c(1.4,103.8),
+      c(1.2,103.9),
+      c(1.0,104.0))
+sg_poly<-cbind(polygon_rev[,2],polygon_rev[,1])#reverse because I need longlat, not latlong
+sg_multipolygon_list <- list(list(
+  sg_poly
+  ))
+
+sg_mp<-st_multipolygon(sg_multipolygon_list)
+
+world_template <- world[world$name_long=="Malaysia",]
+
+world_template[,c("continent",      "area_km2",  "pop",       "lifeExp",   "gdpPercap")]<-NA
+world_template$iso_a2<-"SG"
+world_template$name_long<-"Singapore"
+world_template$geom[[1]]<-sg_mp
+
+
+worldc<-sf::st_as_sf(data.table::rbindlist(list(world,world_template)))
+
+```
+
+
+```{r}
+
+show_leaflet <- function(data_to_show,primary_col,rounding_func,legend_title,
+                         quant_grades=5,pal_reverse=TRUE){
+  
+  pal<-colorQuantile(palette="YlOrRd",domain= data_to_show[[primary_col]],n=quant_grades,reverse=pal_reverse)
+  
+  chloro_labels <- paste0(data_to_show$name_long, ": ", as.character(rounding_func(data_to_show[[primary_col]])))
+  
+  m <- leaflet(data_to_show) %>% 
+  addProviderTiles(providers$OpenStreetMap) %>%
+  addPolygons(data=data_to_show,weight=2,fillColor=~pal(data_to_show[[primary_col]]),
+              fillOpacity = 0.8,
+              highlightOptions = highlightOptions(color='white',weight=1,
+                                                  bringToFront = TRUE),
+              label=chloro_labels,
+              labelOptions=labelOptions(textsize="15px")) %>% 
+  addLegend("bottomright", pal = pal, values = ~data_to_show[[primary_col]],
+            labFormat=function(type,cuts,p){
+              n=length(cuts)
+              return(paste0(rounding_func(cuts[-n])," to ", rounding_func(cuts[-1])))
+              #return(quantile(world_with_covid_data_inc$TestsPerCase,))
+            },
+            
+            #labFormat = labelFormat(transform=function(x){x}),
+    title = legend_title,
+    opacity = 1
+  ) 
+return(m)
+}
+```
+
+# Preliminary: let's get health information.
+
+
+```{r}
+
+world_health<-worldc %>% 
+  left_join(country_iso_2_to_3_map,by=c("iso_a2" = "ISO3166.1.Alpha.2"),name="iso_a2") %>%
+  left_join(life_exp,by=c("ISO3166.1.Alpha.3"="CountryCode"),name="ISO3166.1.Alpha.3")
+#vals_to_include <- is.finite(world_with_covid_data$lifeExp) & !is.na(world_with_covid_data$lifeExp)
+
+#world_with_covid_data_inc<-world_with_covid_data[vals_to_include,]
+
+
+  #setView(zoom=1.5,lat=0,lng =0) 
+show_leaflet(world_health,
+             "LifeExp",
+             function(x){round(x)},
+             "Life expectancy",
+             quant_grades=6
+             )
+```
+
+
+
+# Show the COVID maps
+
+## Inferring detection rate from the number of tests per case. This hasn't worked out..
+
+```{r}
+#load the test rates and prevalence of COVID-19
+
+tests <- read.csv("../data/mapping/full-list-daily-covid-19-tests-per-thousand.csv")
+owid_fullset <-read.csv("../data/mapping/owid-covid-data.csv",stringsAsFactors = FALSE)
+owid_fullset$date<-as.Date(as.character(owid_fullset$date))
+
+#adjustment for China deaths.
+#this is because a whole lot of deaths were attributed to the wrong date.
+chn_extra_deaths<-owid_fullset[owid_fullset$iso_code=="CHN" & owid_fullset$date=="2020-04-17","new_deaths"]
+owid_fullset[owid_fullset$iso_code=="CHN" & owid_fullset$date=="2020-04-17","new_deaths"]<-10
+chn_base_deaths<-sum(owid_fullset[owid_fullset$iso_code=="CHN" ,"new_deaths"])
+chn_prop_increase<-(chn_extra_deaths+chn_base_deaths)/chn_base_deaths
+owid_fullset[owid_fullset$iso_code=="CHN" ,"new_deaths"]<-
+  (
+    round(owid_fullset[owid_fullset$iso_code=="CHN" ,"new_deaths"]*chn_prop_increase)
+  )
+  
+
+
+test_data_availability<-owid_fullset %>% group_by(date) %>% summarise(datacount=sum(!is.na(new_tests)))
+latest_date <- max(owid_fullset$date)
+date_period_begin<- latest_date - days(7)
+
+most_complete_testing_date<-filter(test_data_availability,datacount==max(test_data_availability$datacount))$date
+
+
+
+#one day
+# owid_fullset_latest_case_data <- owid_fullset %>% filter(date>=latest_date) %>% select(-contains("test"))%>% select(-date)
+# owid_fullset_latest_testing_data<-owid_fullset %>% filter(date==most_complete_testing_date) %>% select(iso_code,contains("test"))
+# owid_observable_data<-left_join(owid_fullset_latest_case_data,owid_fullset_latest_testing_data)
+# owid_observable_data$TestsPerCase<-owid_observable_data$new_tests/owid_observable_data$new_cases
+# world_with_covid_data<-
+#   left_join(world,country_iso_2_to_3_map,by=c("iso_a2" = "ISO3166.1.Alpha.2"),name="iso_a2") %>%
+#   left_join(owid_observable_data,by=c("ISO3166.1.Alpha.3" = "iso_code"))
+
+#let's try 7-day averages
+owid_7_day_average_testing_observable<-owid_fullset %>% 
+  filter(date>=date_period_begin) %>% 
+  select(-contains("total"))%>%select(-contains("tests_units"))%>%  
+  group_by(iso_code,location) %>%
+  summarise_all(mean,na.rm=TRUE)
+
+owid_7_day_average_testing_observable$TestsPerCase <- owid_7_day_average_testing_observable$new_tests/owid_7_day_average_testing_observable$new_cases
+world_with_covid_data<-
+  #left_join(world,country_iso_2_to_3_map,by=c("iso_a2" = "ISO3166.1.Alpha.2"),name="iso_a2") %>%
+  world_health %>%
+  left_join(owid_7_day_average_testing_observable,by=c("ISO3166.1.Alpha.3" = "iso_code"))
+```
+
+
+```{r}
+
+vals_to_include <- 
+  (is.finite(world_with_covid_data$TestsPerCase) & !is.na(world_with_covid_data$TestsPerCase)
+   & world_with_covid_data$LifeExp>=75
+  )
+
+world_with_covid_data_inc<-world_with_covid_data[vals_to_include,]
+
+show_leaflet(data_to_show = world_with_covid_data_inc,
+             primary_col = "TestsPerCase",
+            rounding_func = function(x){round(x)},
+               legend_title = "Tests per case <br /> (7 day average)")
+
+```
+
+## Inferring the detection rate from number of deaths relative to detected cases 3 weeks ago.
+
+What if, as a first cut, we estimate the true infections as the number of deaths 3 weeks prior, multiplied by 200, to assume an 0.5% CFR? That might be appropriate - let's see how it compares.
+
+See 
+ - https://www.businessinsider.com.au/real-number-of-coronavirus-cases-underreported-us-china-italy-2020-4?r=US&IR=T
+ - https://twitter.com/trvrb/status/1249414309379051521
+ - https://science.sciencemag.org/content/early/2020/04/24/science.abb3221
+ 
+The estimates I've come up with are credible, though on the high side.
+
+However the method I've used isn't mentioned by the published research - it may be overly simplistic.
+
+```{r}
+
+#we could do the lags another day but right now we're just interested in that one 3 week average figure.
+
+#select the cases 3 weeks ago
+owid_7_day_cases_lagged<-owid_fullset %>% 
+  filter(date>=(date_period_begin - days(21)) & date<(date_period_begin - days(14))) %>% 
+  select(iso_code,location,contains("cases")) %>% 
+  group_by(iso_code,location) %>%
+  summarise_all(mean,na.rm=TRUE)
+
+#select the current deaths
+owid_7_day_deaths<-owid_fullset %>% 
+  filter(date>=date_period_begin) %>% 
+  select(iso_code,location,contains("deaths")) %>% 
+  group_by(iso_code,location) %>%
+  summarise_all(mean,na.rm=TRUE)
+
+
+
+deaths_with_lagged_cases <- owid_7_day_cases_lagged %>% left_join(owid_7_day_deaths)
+
+assumed_cfr<-0.005
+deaths_with_lagged_cases$InferredDetectionRate <- assumed_cfr*deaths_with_lagged_cases$new_cases/(deaths_with_lagged_cases$new_deaths)
+deaths_with_lagged_cases$CountryPopulation<-deaths_with_lagged_cases$total_cases/deaths_with_lagged_cases$total_cases_per_million*10^6
+#we want the inferred case population rate
+#this has to come from the john hopkins data because we can get active cases from that.
+jh_key_stats<-jh_dxc %>% ungroup %>% 
+  filter(Date>=date_period_begin) %>% 
+  select(CasesConfirmed,Deaths,Recoveries,ActiveCases, `ISO3166-1-Alpha-3`) %>%
+  group_by(`ISO3166-1-Alpha-3`) %>%
+  summarise_all(mean)
+deaths_with_lagged_cases <- deaths_with_lagged_cases %>% left_join(jh_key_stats,by=c("iso_code"="ISO3166-1-Alpha-3"))
+
+deaths_with_lagged_cases$InferredActiveCases <- (
+  (deaths_with_lagged_cases$ActiveCases/deaths_with_lagged_cases$InferredDetectionRate)
+)
+
+deaths_with_lagged_cases$InferredActiveCasePopRate <- 
+  (deaths_with_lagged_cases$InferredActiveCases/
+    deaths_with_lagged_cases$CountryPopulation)
+
+deaths_with_lagged_cases$ActiveCasePopRate <- (
+  (deaths_with_lagged_cases$ActiveCases/deaths_with_lagged_cases$CountryPopulation)
+)
+
+
+
+world_with_covid_data<-
+  #left_join(world,country_iso_2_to_3_map,by=c("iso_a2" = "ISO3166.1.Alpha.2"),name="iso_a2") %>%
+  world_health %>%
+  left_join(deaths_with_lagged_cases,by=c("ISO3166.1.Alpha.3" = "iso_code"))
+```
+
+
+
+
+
+```{r}
+
+world_with_covid_data$InferredDetectionRate[is.infinite(world_with_covid_data$InferredDetectionRate)]<-1
+
+vals_to_include <- (is.finite(world_with_covid_data$InferredDetectionRate) & !is.na(world_with_covid_data$InferredDetectionRate)
+                    
+   & world_with_covid_data$LifeExp>=75
+  )
+
+inc_data<-world_with_covid_data[vals_to_include,]
+
+
+show_leaflet(data_to_show = inc_data,
+             primary_col = "InferredDetectionRate",
+            rounding_func = function(x){scales::percent(x,accuracy = 0.1)},
+               legend_title = "Inferred detection rate <br /> (deaths over cases three weeks prior; <br /> countries with a life expectancy of 75 or greater)")
+```
+
+
+
+
+```{r}
+
+
+world_with_covid_data$InfActiveCasesPerMillion <- world_with_covid_data$InferredActiveCasePopRate*10^6
+world_with_covid_data$InfActiveCasesPerThousand <- world_with_covid_data$InferredActiveCasePopRate*10^3
+world_with_covid_data$ActiveCasesPerThousand <- world_with_covid_data$ActiveCasePopRate*10^3
+vals_to_include <- (
+  is.finite(world_with_covid_data$ActiveCasesPerThousand) & !is.na(world_with_covid_data$ActiveCasesPerThousand)
+                    
+   & world_with_covid_data$LifeExp>=70
+  )
+
+inc_data<-world_with_covid_data[vals_to_include,]
+#pal<-colorQuantile(palette="Blues",domain= inc_data$ActiveCasesPerThousand,n=4)
+
+#chloro_labels <- paste0(inc_data$name_long, ": ", as.character(round(inc_data$ActiveCasesPerThousand,1)))
+
+show_leaflet(data_to_show = inc_data,primary_col = "InfActiveCasesPerThousand",
+             rounding_func = function(x){signif(x,2)},
+             legend_title =  "Inferred active cases per million people <br /> (likely to underestimate in countries<br /> with poor death recording)",
+             quant_grades = 6,
+             pal_reverse = FALSE
+            )
+
+```
+
+
+
+
+```{r}
+vals_to_include <- (
+  is.finite(world_with_covid_data$ActiveCasesPerThousand) & !is.na(world_with_covid_data$ActiveCasesPerThousand)
+                    
+   & world_with_covid_data$LifeExp>=70
+  )
+
+inc_data<-world_with_covid_data[vals_to_include,]
+#pal<-colorQuantile(palette="Blues",domain= inc_data$ActiveCasesPerThousand,n=4)
+
+#chloro_labels <- paste0(inc_data$name_long, ": ", as.character(round(inc_data$ActiveCasesPerThousand,1)))
+
+show_leaflet(data_to_show = inc_data,primary_col = "ActiveCasesPerThousand",
+             rounding_func = function(x){signif(x, 2)},
+             legend_title =  "Confirmed active cases per million people",
+             quant_grades = 6,
+             pal_reverse = FALSE
+            )
+
+```
+
+
+
+
+
+```{r}
+vals_to_include <- (
+  is.finite(world_with_covid_data$InferredActiveCases) & !is.na(world_with_covid_data$InferredActiveCases)
+                    
+   & world_with_covid_data$LifeExp>=70
+  )
+
+inc_data<-world_with_covid_data[vals_to_include,]
+#pal<-colorQuantile(palette="Blues",domain= inc_data$ActiveCasesPerThousand,n=4)
+
+#chloro_labels <- paste0(inc_data$name_long, ": ", as.character(round(inc_data$ActiveCasesPerThousand,1)))
+
+show_leaflet(data_to_show = inc_data,primary_col = "InferredActiveCases",
+             rounding_func = function(x){scales::comma(round(x,1))},
+             legend_title =  "Inferred active cases<br /> (likely to underestimate in countries<br /> with poor death recording)",
+             quant_grades = 6,
+             pal_reverse = FALSE
+            )
+
+```
+
+
+
+
+
+```{r}
+vals_to_include <- (
+  is.finite(world_with_covid_data$ActiveCases) & !is.na(world_with_covid_data$ActiveCases)
+                    
+   & world_with_covid_data$LifeExp>=70
+  )
+
+inc_data<-world_with_covid_data[vals_to_include,]
+#pal<-colorQuantile(palette="Blues",domain= inc_data$ActiveCasesPerThousand,n=4)
+
+#chloro_labels <- paste0(inc_data$name_long, ": ", as.character(round(inc_data$ActiveCasesPerThousand,1)))
+
+show_leaflet(data_to_show = inc_data,primary_col = "ActiveCases",
+             rounding_func = function(x){scales::comma(round(x,0))},
+             legend_title =  "Confirmed active cases",
+             quant_grades = 6,
+             pal_reverse = FALSE
+            )
+
+```

@@ -1,2 +1,14 @@
 .RData
 .Rhistory
+.Rproj.user
+.Rproj.user/*
+
+
+*/.DS_Store
+.httr-oauth
+infection_rate/data/*
+
+*/rsconnect/*
+
+READI-SCRUB/
+READI-SCRUB/*
